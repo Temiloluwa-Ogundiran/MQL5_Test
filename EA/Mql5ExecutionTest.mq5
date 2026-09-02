@@ -98,7 +98,8 @@ datetime JTime(string js, string key)
       s = StringSubstr(s, 0, d);
 
    StringReplace(s, "-", ".");
-   StringTrim(s);
+   StringTrimLeft(s);
+   StringTrimRight(s);
 
    return StringToTime(s);
 }
@@ -159,7 +160,7 @@ void Reconcile()
 
       char d[];
       StringToCharArray(body, d);
-      ArrayResize(d, ArraySize(d) - 1);
+      ArrayResize(d, (uint)(ArraySize(d) - 1));
 
       char res[];
       string hdr = "Content-Type: application/json\r\n";
@@ -297,7 +298,7 @@ void SendReport(string sid, ulong ord, ulong dea, ulong pos, double pr, double v
 
    char d[];
    StringToCharArray(body, d);
-   ArrayResize(d, ArraySize(d) - 1);
+   ArrayResize(d, (uint)(ArraySize(d) - 1));
 
    char res[];
    string hdr = "Content-Type: application/json\r\n";

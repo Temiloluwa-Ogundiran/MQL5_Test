@@ -11,7 +11,7 @@ class IntentIn(BaseModel):
     lots: float
     sl: float = 0
     tp: float = 0
-    generated_at: datetime
+    generated_at: datetime | None = None
 
 
 class IntentOut(IntentIn):

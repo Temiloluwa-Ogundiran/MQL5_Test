@@ -24,6 +24,15 @@ def mk_comment(s):
     return hashlib.md5(s.encode()).hexdigest()[:12]
 
 
+@app.get("/")
+def root():
+    return {
+        "msg": "MQL5 Execution API running",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -32,7 +41,7 @@ def health():
 @app.post("/intents", response_model=IntentOut, status_code=201)
 def create_intent(data: IntentIn, db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
-    gen = data.generated_at
+    gen = data.generated_at or now
     if gen.tzinfo is None:
         gen = gen.replace(tzinfo=timezone.utc)
     age = (now - gen).total_seconds()
@@ -46,7 +55,9 @@ def create_intent(data: IntentIn, db: Session = Depends(get_db)):
             return row
         m = mk_magic(data.signal_id)
         c = mk_comment(data.signal_id)
-        row = Intent(**data.model_dump(), magic_number=m, comment=c, status="STALE")
+        payload = data.model_dump()
+        payload["generated_at"] = gen
+        row = Intent(**payload, magic_number=m, comment=c, status="STALE")
         db.add(row)
         db.commit()
         db.refresh(row)
@@ -60,7 +71,9 @@ def create_intent(data: IntentIn, db: Session = Depends(get_db)):
         return row
     m = mk_magic(data.signal_id)
     c = mk_comment(data.signal_id)
-    row = Intent(**data.model_dump(), magic_number=m, comment=c, status="PENDING")
+    payload = data.model_dump()
+    payload["generated_at"] = gen
+    row = Intent(**payload, magic_number=m, comment=c, status="PENDING")
     db.add(row)
     db.commit()
     db.refresh(row)

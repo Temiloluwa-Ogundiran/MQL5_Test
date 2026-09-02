@@ -6,7 +6,7 @@ BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 sys.path.insert(0, str(ROOT))
 
-from datetime import datetime, timedelta, timezone  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
@@ -56,9 +56,16 @@ def test_models_import():
     assert Intent is not None
 
 
+def test_root():
+    _reset()
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.json()["msg"] == "MQL5 Execution API running"
+    assert r.json()["docs"] == "/docs"
+
+
 def test_post_intent_and_idempotency():
     _reset()
-    now = datetime.now(timezone.utc)
     payload = {
         "signal_id": "SIG-IDEM-001",
         "account_id": 12345,
@@ -67,13 +74,13 @@ def test_post_intent_and_idempotency():
         "lots": 0.1,
         "sl": 0,
         "tp": 0,
-        "generated_at": now.isoformat(),
     }
     r1 = client.post("/intents", json=payload)
     assert r1.status_code == 201, r1.text
     j1 = r1.json()
     assert 10000 <= j1["magic_number"] < 60000
     assert len(j1["comment"]) == 12
+    assert "generated_at" in j1
 
     r2 = client.post("/intents", json=payload)
     assert r2.status_code in (200, 201), r2.text
@@ -88,37 +95,32 @@ def test_post_intent_and_idempotency():
     assert len(r3.json()) == 1
 
 
-def test_staleness_reject():
+def test_auto_generated_at():
     _reset()
-    old = datetime.now(timezone.utc) - timedelta(seconds=400)
     payload = {
-        "signal_id": "SIG-STALE-001",
+        "signal_id": "SIG-AUTO-001",
         "account_id": 99999,
         "symbol": "EURUSD",
         "direction": "SELL",
         "lots": 0.1,
         "sl": 0,
         "tp": 0,
-        "generated_at": old.isoformat(),
     }
+    before = datetime.now(timezone.utc)
     r = client.post("/intents", json=payload)
-    assert r.status_code == 400, r.text
-
-    # Second post returns existing STALE row idempotently.
-    # First stale stores then raises 400, second returns row.
-    r2 = client.post("/intents", json=payload)
-    assert r2.status_code in (200, 201), r2.text
-    j2 = r2.json()
-    assert j2["status"] == "STALE"
-
-    # GET next should not return stale
+    assert r.status_code == 201, r.text
+    j = r.json()
+    gen = datetime.fromisoformat(j["generated_at"])
+    if gen.tzinfo is None:
+        gen = gen.replace(tzinfo=timezone.utc)
+    assert gen >= before
+    # GET next should return it
     nxt = client.get("/intents/next", params={"account_id": 99999})
-    assert nxt.status_code == 204
+    assert nxt.status_code == 200
 
 
 def test_report_appends_history():
     _reset()
-    now = datetime.now(timezone.utc)
     payload = {
         "signal_id": "SIG-REP-001",
         "account_id": 55555,
@@ -127,7 +129,6 @@ def test_report_appends_history():
         "lots": 0.2,
         "sl": 0,
         "tp": 0,
-        "generated_at": now.isoformat(),
     }
     ri = client.post("/intents", json=payload)
     assert ri.status_code == 201
@@ -175,7 +176,6 @@ def test_health_and_next():
     h = client.get("/health")
     assert h.status_code == 200 and h.json() == {"ok": True}
 
-    now = datetime.now(timezone.utc)
     p = {
         "signal_id": "SIG-NEXT-001",
         "account_id": 77777,
@@ -184,7 +184,6 @@ def test_health_and_next():
         "lots": 0.1,
         "sl": 0,
         "tp": 0,
-        "generated_at": now.isoformat(),
     }
     client.post("/intents", json=p)
     nxt = client.get("/intents/next", params={"account_id": 77777})

@@ -11,10 +11,17 @@ class IntentIn(BaseModel):
     lots: float
     sl: float = 0
     tp: float = 0
-    generated_at: datetime | None = None
 
 
-class IntentOut(IntentIn):
+class IntentOut(BaseModel):
+    signal_id: str
+    account_id: int
+    symbol: str
+    direction: str
+    lots: float
+    sl: float = 0
+    tp: float = 0
+    generated_at: datetime
     magic_number: int
     comment: str
     status: str

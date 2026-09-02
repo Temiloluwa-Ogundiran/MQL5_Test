@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
-from .config import STALE_SEC
 from .db import Base, engine, get_db
 from .models import Intent, Report
 from .schemas import IntentIn, IntentOut, ReportIn
@@ -40,28 +39,8 @@ def health():
 
 @app.post("/intents", response_model=IntentOut, status_code=201)
 def create_intent(data: IntentIn, db: Session = Depends(get_db)):
-    now = datetime.now(timezone.utc)
-    gen = data.generated_at or now
-    if gen.tzinfo is None:
-        gen = gen.replace(tzinfo=timezone.utc)
-    age = (now - gen).total_seconds()
-    if age > STALE_SEC:
-        row = (
-            db.query(Intent)
-            .filter_by(signal_id=data.signal_id, account_id=data.account_id)
-            .first()
-        )
-        if row:
-            return row
-        m = mk_magic(data.signal_id)
-        c = mk_comment(data.signal_id)
-        payload = data.model_dump()
-        payload["generated_at"] = gen
-        row = Intent(**payload, magic_number=m, comment=c, status="STALE")
-        db.add(row)
-        db.commit()
-        db.refresh(row)
-        raise HTTPException(status_code=400, detail="stale intent")
+    gen = datetime.now(timezone.utc)
+    # Check idempotency
     row = (
         db.query(Intent)
         .filter_by(signal_id=data.signal_id, account_id=data.account_id)

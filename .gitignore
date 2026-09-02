@@ -1,0 +1,7 @@
+docs/
+AGENTS.md
+.env
+__pycache__/
+*.pyc
+.venv/
+pgdata/
